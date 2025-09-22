@@ -2,14 +2,14 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import sklearn, joblib, sys
+import sklearn
+import joblib
+import sys
 from pathlib import Path
 from joblib import load
 
 st.set_page_config(page_title="Titanic Survival Predictor", page_icon="🚢", layout="centered")
-st.title("Titanic Survival Predictor 🚢")
 
-# Show versions to diagnose any pickle mismatches
 st.caption({
     "python": sys.version,
     "sklearn": sklearn.__version__,
@@ -24,6 +24,7 @@ def load_model():
     return load(model_path)
 
 clf = load_model()
+
 
 st.subheader("Passenger inputs")
 col1, col2 = st.columns(2)
