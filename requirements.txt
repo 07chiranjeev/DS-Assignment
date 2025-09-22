@@ -1,0 +1,7 @@
+# requirements.txt
+streamlit==1.36.0
+pandas==2.2.2
+scikit-learn==1.6.1
+joblib==1.4.2
+# Let pip pick a compatible NumPy for Python 3.13 and scikit-learn 1.6.x
+numpy>=2.0
