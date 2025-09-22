@@ -1,6 +1,4 @@
-# app.py
-# Robust Streamlit app: loads saved model if present; otherwise trains on local Titanic_train.csv (or remote fallback).
-
+# app.py — robust Streamlit app for Titanic
 import sys
 from pathlib import Path
 
@@ -8,7 +6,8 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from joblib import dump, load
+# ML imports (critical: no trailing comma/dot)
+from joblib import load
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
@@ -18,10 +17,15 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 st.set_page_config(page_title="Titanic Survival Predictor", page_icon="🚢", layout="centered")
 st.title("Titanic Survival Predictor 🚢")
 
-# Versions confirm dependencies installed on Cloud
 try:
     import sklearn, joblib
-    st.caption({"python": sys.version, "sklearn": sklearn.__version__, "pandas": pd.__version__, "numpy": np.__version__, "joblib": joblib.__version__})
+    st.caption({
+        "python": sys.version,
+        "sklearn": sklearn.__version__,
+        "pandas": pd.__version__,
+        "numpy": np.__version__,
+        "joblib": joblib.__version__
+    })
 except Exception:
     st.caption({"python": sys.version, "pandas": pd.__version__, "numpy": np.__version__})
 
@@ -34,15 +38,12 @@ FEATURES = ["Pclass","Sex","Age","SibSp","Parch","Fare","Embarked","Title","Fami
 NUMERIC = ["Age","SibSp","Parch","Fare","FamilySize","IsAlone"]
 CATEGORICAL = ["Pclass","Sex","Embarked","Title"]
 CAT_CATEGORIES = [
-    [1, 2, 3],                               # Pclass
-    ["male", "female"],                      # Sex
-    ["S", "C", "Q"],                         # Embarked
-    ["Mr","Mrs","Miss","Master","Officer","Royal","Unknown"]  # Title
+    [1, 2, 3], ["male", "female"], ["S", "C", "Q"],
+    ["Mr","Mrs","Miss","Master","Officer","Royal","Unknown"]
 ]
 
 def extract_title(name: str) -> str:
-    if pd.isna(name):
-        return "Unknown"
+    if pd.isna(name): return "Unknown"
     t = name.split(",")[1].split(".")[0].strip()
     mapping = {
         "Mr":"Mr","Mrs":"Mrs","Miss":"Miss","Master":"Master",
@@ -56,10 +57,8 @@ def add_engineered(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     if "Title" not in df.columns:
         df["Title"] = df["Name"].apply(extract_title)
-    if "FamilySize" not in df.columns:
-        df["FamilySize"] = df["SibSp"] + df["Parch"] + 1
-    if "IsAlone" not in df.columns:
-        df["IsAlone"] = (df["FamilySize"] == 1).astype(int)
+    df["FamilySize"] = df["SibSp"] + df["Parch"] + 1
+    df["IsAlone"] = (df["FamilySize"] == 1).astype(int)
     return df
 
 def build_pipeline() -> Pipeline:
@@ -67,34 +66,24 @@ def build_pipeline() -> Pipeline:
     cat = Pipeline([("imputer", SimpleImputer(strategy="most_frequent")),
                     ("onehot", OneHotEncoder(categories=CAT_CATEGORIES, drop="first", handle_unknown="ignore"))])
     pre = ColumnTransformer([("num", num, NUMERIC), ("cat", cat, CATEGORICAL)])
-    clf = Pipeline([("preprocess", pre), ("model", LogisticRegression(max_iter=1000, solver="liblinear"))])
-    return clf
+    return Pipeline([("preprocess", pre), ("model", LogisticRegression(max_iter=1000, solver="liblinear"))])
 
 @st.cache_resource(show_spinner=False)
 def get_or_train_model() -> Pipeline:
-    # Load saved model if present
     if MODEL_PATH.exists():
-        return load(MODEL_PATH)
-    # Otherwise pick local CSV if present, else remote fallback
+        try:
+            return load(MODEL_PATH)
+        except Exception:
+            pass
     if LOCAL_TRAIN.exists():
         df = pd.read_csv(LOCAL_TRAIN)
     else:
         df = pd.read_csv(REMOTE_TRAIN)
     df = add_engineered(df)
-    missing = set(FEATURES + ["Survived"]) - set(df.columns)
-    if missing:
-        st.error(f"Training data missing columns: {sorted(missing)}")
-        st.stop()
-    X = df[FEATURES]
-    y = df["Survived"].astype(int)
-    clf = build_pipeline()
-    clf.fit(X, y)
-    # Save when writable
-    try:
-        dump(clf, MODEL_PATH)
-    except Exception:
-        pass
-    return clf
+    X, y = df[FEATURES], df["Survived"].astype(int)
+    pipe = build_pipeline()
+    pipe.fit(X, y)
+    return pipe
 
 with st.status("Preparing model...", expanded=False):
     clf = get_or_train_model()
@@ -116,20 +105,17 @@ family_size = sibsp + parch + 1
 is_alone = 1 if family_size == 1 else 0
 st.caption(f"Computed — FamilySize: {family_size}, IsAlone: {is_alone}")
 
-row = {
+X_input = pd.DataFrame([{
     "Pclass": pclass, "Sex": sex, "Age": age, "SibSp": sibsp, "Parch": parch,
     "Fare": fare, "Embarked": embarked, "Title": title,
     "FamilySize": family_size, "IsAlone": is_alone
-}
-X_input = pd.DataFrame([row])
+}])
 
-# Show an immediate demo prediction so the page always shows output
 proba_demo = float(clf.predict_proba(X_input)[:, 1][0])
 pred_demo = int(proba_demo >= 0.5)
 st.metric("Survival probability", f"{proba_demo:.3f}")
 st.metric("Predicted Survived (0/1)", f"{pred_demo}")
 
-# Optional explicit button for re-run clarity
 if st.button("Predict"):
     proba = float(clf.predict_proba(X_input)[:, 1][0])
     pred = int(proba >= 0.5)
